@@ -18,6 +18,7 @@
 #include "WebView2.h"
 #include <WebView2.h>
 #include <wrl.h>
+#include <future>
 
 #pragma comment(lib, "wininet.lib")
 #ifdef _DEBUG
@@ -246,20 +247,14 @@ void C剧情处理Dlg::OnBnClickedButton1()
 		index = url.Find(TEXT(" "));
 		url.Replace(TEXT(" "), TEXT("_"));
 	}
-	rurl = TEXT("https://prts.wiki/w/");
-	if (!m_issource.GetCheck()) rurl = TEXT("https://prts.wiki/index.php?title=");
+	rurl = TEXT("https://prts.wiki/index.php?title=");
 	rurl += url;
-	if(!m_issource.GetCheck()) rurl += TEXT("&action=edit");
-	NavigateToURL((LPCWSTR)rurl);
+	rurl += TEXT("&action=edit");
+	if(!m_issource.GetCheck())NavigateToURL((LPCWSTR)rurl);
 	cururl = rurl;
 	UpdateData(false);
-	if (!m_issource.GetCheck()) {
-		//m_webbrowser.Navigate(rurl, &noArg, &noArg, &noArg, &noArg);
-		//MessageBox(TEXT("当前无法在此页面直接获取内容，请开启源代码模式"));
-	}
-	else {
-		GetSourceCode(rurl);
-	}
+	if (m_issource.GetCheck()) GetSourceCode(rurl);
+
 }
 
 void C剧情处理Dlg::OnDocumentComplete(LPDISPATCH pDisp, VARIANT* URL)
@@ -469,84 +464,9 @@ void C剧情处理Dlg::OnStnClickedLinenum()
 }
 
 void C剧情处理Dlg::GetSourceCode(CString url) {
-	CString strResult;
-
-	// 初始化WinINet
-	HINTERNET hInternet = InternetOpen(
-		_T("MFC_FetchAgent"),  // 使用_T宏兼容Unicode
-		INTERNET_OPEN_TYPE_DIRECT,
-		NULL,
-		NULL,
-		0
-	);
-
-	if (!hInternet) {
-		MessageBox(TEXT("打开网页失败"));
-		return; // 返回空字符串表示失败
-	}
-
-	// 设置请求标志
-	DWORD dwFlags =
-		INTERNET_FLAG_RELOAD |
-		INTERNET_FLAG_NO_CACHE_WRITE;
-
-	// 自动识别HTTPS
-	if (url.Left(8) == _T("https://")) {
-		dwFlags |= INTERNET_FLAG_SECURE;
-	}
-
-	// 打开URL连接（使用T2CW转换字符串）
-	HINTERNET hUrl = InternetOpenUrl(
-		hInternet,
-		url,
-		NULL,           // 无额外HTTP头
-		0,              // 头长度
-		dwFlags,
-		0
-	);
-
-	if (!hUrl) {
-		InternetCloseHandle(hInternet);
-		MessageBox(TEXT("打开网页失败"));
-		return;
-	}
-	// 读取数据到CString
-	std::string rawData;
-	char buffer[4096];
-	DWORD dwRead = 0;
-
-	while (InternetReadFile(hUrl, buffer, sizeof(buffer), &dwRead) && dwRead > 0) {
-		rawData.append(buffer, dwRead);
-	}
-
-	// 清理资源
-	InternetCloseHandle(hUrl);
-	InternetCloseHandle(hInternet);
-	if (!rawData.empty()) {
-		int wideSize = MultiByteToWideChar(
-			CP_UTF8,          // 源编码为UTF-8
-			0,
-			rawData.data(),
-			rawData.size(),
-			NULL,
-			0
-		);
-
-		if (wideSize > 0) {
-			std::wstring wstr(wideSize, 0);
-			MultiByteToWideChar(
-				CP_UTF8,
-				0,
-				rawData.data(),
-				rawData.size(),
-				&wstr[0],
-				wideSize
-			);
-			strResult = wstr.c_str();
-		}
-	}
+	CString strResult = GetSourceCodeSync(url);
 	WriteCopyBoard(strResult);
-	CString a = TEXT("<script type=\"csv\" id=\"datas_txt\">") , b = TEXT("</script>");
+	CString a = TEXT("<textarea ") , b = TEXT("</textarea>");
 	int nStartA = strResult.Find(a);
 	if (nStartA == -1) {
 		MessageBox(TEXT("不存在可用的文本，请检查网页内容！"));
@@ -856,3 +776,119 @@ LRESULT C剧情处理Dlg::OnSelectionResult(WPARAM wParam, LPARAM lParam)
 	}
 	return 0;
 }
+
+CString C剧情处理Dlg::GetSourceCodeSync(CString url)
+{
+	std::promise<CString> promise;
+	auto future = promise.get_future();
+
+	// 1. 注册 NavigationCompleted 事件
+	EventRegistrationToken token;
+	webView->add_NavigationCompleted(
+		Microsoft::WRL::Callback<ICoreWebView2NavigationCompletedEventHandler>(
+			[this, &promise](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs* args) -> HRESULT
+			{
+				BOOL isSuccess = FALSE;
+				args->get_IsSuccess(&isSuccess);
+
+				if (isSuccess)
+				{
+					// 2. 页面加载完成后执行脚本
+					this->webView->ExecuteScript(
+						L"document.documentElement.outerHTML;",
+						Microsoft::WRL::Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
+							[&promise](HRESULT errorCode, LPCWSTR resultObjectAsJson) -> HRESULT
+							{
+								CString result;
+								if (SUCCEEDED(errorCode) && resultObjectAsJson)
+								{
+									std::wstring wjson(resultObjectAsJson);
+									if (wjson.size() >= 2 && wjson.front() == L'"' && wjson.back() == L'"')
+										wjson = wjson.substr(1, wjson.size() - 2);
+
+									std::wstring whtml;
+									for (size_t i = 0; i < wjson.size(); i++)
+									{
+										if (wjson[i] == L'\\' && i + 1 < wjson.size())
+										{
+											if (wjson[i + 1] == L'n')
+											{
+												whtml += L'\n'; // 换行
+												i++;
+											}
+											else if (wjson[i + 1] == L'r')
+											{
+												whtml += L'\r'; // 回车
+												i++;
+											}
+											else if (wjson[i + 1] == L't')
+											{
+												whtml += L'\t'; // 制表符
+												i++;
+											}
+											else if (wjson[i + 1] == L'u' && i + 5 < wjson.size())
+											{
+												// 处理 Unicode 转义，如 \u003C -> '<'
+												std::wstring hex = wjson.substr(i + 2, 4);
+												wchar_t ch = static_cast<wchar_t>(std::stoi(hex, nullptr, 16));
+												whtml += ch;
+												i += 5;
+											}
+											else
+											{
+												// 其他情况直接取后一个字符（不做额外转义）
+												whtml += wjson[i + 1];
+												i++;
+											}
+										}
+										else
+										{
+											whtml += wjson[i];
+										}
+									}
+
+									result = CString(whtml.c_str());
+								}
+								promise.set_value(result);
+								return S_OK;
+							}
+						).Get()
+								);
+				}
+				else
+				{
+					promise.set_value(L""); // 加载失败也必须返回
+				}
+				return S_OK;
+			}
+		).Get(),
+				&token
+				);
+
+	// 3. 开始导航
+	this->webView->Navigate(url);
+
+	// 4. 消息循环等待
+	while (future.wait_for(std::chrono::milliseconds(10)) != std::future_status::ready)
+	{
+		MSG msg;
+		while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
+		{
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+		Sleep(10);
+	}
+
+	// 5. 获取结果
+	CString result = future.get();
+
+	// 6. 移除事件处理（可选）
+	webView->remove_NavigationCompleted(token);
+
+	return result;
+}
+
+
+
+

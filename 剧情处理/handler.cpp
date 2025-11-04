@@ -31,7 +31,7 @@ void HANDLEER::handlerer() {
 			aft = FindAndCut(aft, TEXT("<i>"), TEXT("</i>"));
 		if (aft == TEXT("")) emptyline++;
 		else {
-			if (emptyline > 7) afterhand += "//\n";
+			if (emptyline > 7 && i > emptyline + 10) afterhand += "//\n";
 			emptyline = 0;
 			afterhand += aft;
 			afterhand += "\n";
@@ -151,6 +151,8 @@ CString HANDLEER::dealStic(CString tar) {
 	CString ans = TEXT("");
 	if (tar.Find(TEXT("text=")) == -1) return ans;
 	ans = FindAndCut(tar, TEXT("text="), TEXT(", x="));
+	if (tar.Find(TEXT(", x=")) == -1) ans = FindAndCut(tar, TEXT("text="), TEXT(",bl"));
+	ans.Replace(_T("\\n"), _T(""));
 	return ans;
 }
 

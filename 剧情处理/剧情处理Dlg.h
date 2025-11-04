@@ -87,12 +87,14 @@ public:
 	HWND m_webViewHwnd = nullptr; // 新增：保存WebView2的窗口句柄
 	void NavigateToURL(const std::wstring& url);
 	void clear(int mode);
-
+	bool m_bNavEventRegistered = false;
+	CString m_strLastHtml;
 	afx_msg void OnBnClickedButton6();
 	afx_msg LRESULT OnFetchComplete(WPARAM wParam, LPARAM lParam);
 	UINT AsyncFetchThreadProc(LPVOID pParam);
 	afx_msg LRESULT OnSelectionResult(WPARAM, LPARAM lParam);
 	CString SelectedWord;
+	CString GetSourceCodeSync(CString url);
 };
 
 // 辅助类定义
