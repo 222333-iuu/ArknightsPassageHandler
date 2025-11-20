@@ -95,6 +95,16 @@ public:
 	afx_msg LRESULT OnSelectionResult(WPARAM, LPARAM lParam);
 	CString SelectedWord;
 	CString GetSourceCodeSync(CString url);
+	CComboBox m_todolist;
+	CButton autonext;
+	afx_msg void OnEnChangeEdit5();
+	CEdit m_que;
+	CButton m_query;
+	CButton m_goto;
+	afx_msg void OnBnClickedButton7();
+	CString m_quetext;
+	afx_msg void OnBnClickedButton8();
+	CButton m_contcopy;
 };
 
 // 辅助类定义

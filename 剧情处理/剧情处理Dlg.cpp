@@ -72,6 +72,7 @@ C剧情处理Dlg::C剧情处理Dlg(CWnd* pParent /*=nullptr*/)
 	, linenum(_T(""))
 	, Cururl(_T(""))
 	, cururl(_T(""))
+	, m_quetext(_T(""))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -95,6 +96,13 @@ void C剧情处理Dlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_CurTEXT, Cururl);
 	DDX_Control(pDX, IDC_CurTEXT, m_cururl);
 	DDX_Text(pDX, IDC_EDIT4, cururl);
+	DDX_Control(pDX, IDC_COMBO1, m_todolist);
+	DDX_Control(pDX, IDC_CHECK3, autonext);
+	DDX_Control(pDX, IDC_EDIT5, m_que);
+	DDX_Control(pDX, IDC_BUTTON7, m_query);
+	DDX_Control(pDX, IDC_BUTTON8, m_goto);
+	DDX_Text(pDX, IDC_EDIT5, m_quetext);
+	DDX_Control(pDX, IDC_CHECK4, m_contcopy);
 }
 
 BEGIN_MESSAGE_MAP(C剧情处理Dlg, CDialogEx)
@@ -115,6 +123,9 @@ BEGIN_MESSAGE_MAP(C剧情处理Dlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON6, &C剧情处理Dlg::OnBnClickedButton6)
 	ON_MESSAGE(WM_FETCH_COMPLETE, OnFetchComplete)
 	ON_MESSAGE(WM_SELECTION_RESULT, &C剧情处理Dlg::OnSelectionResult)
+	ON_EN_CHANGE(IDC_EDIT5, &C剧情处理Dlg::OnEnChangeEdit5)
+	ON_BN_CLICKED(IDC_BUTTON7, &C剧情处理Dlg::OnBnClickedButton7)
+	ON_BN_CLICKED(IDC_BUTTON8, &C剧情处理Dlg::OnBnClickedButton8)
 END_MESSAGE_MAP()
 
 
@@ -345,6 +356,9 @@ CString C剧情处理Dlg::ReadCopyBoard() {
 }
 
 void C剧情处理Dlg::WriteCopyBoard(CString strData) {
+	if (m_contcopy.GetCheck()) {
+		strData = ReadCopyBoard() +TEXT("\n") + m_url + TEXT("\n") + strData;
+	}
 	int len = strData.GetLength();
 
 	if (len <= 0) return;
@@ -562,6 +576,7 @@ void C剧情处理Dlg::clear(int mode) {
 	m_adddescription = TEXT("");
 	linenum = TEXT("字数:0");
 	m_text = TEXT("");
+	autonext.SetCheck(true);
 	UpdateData(false);
 }
 
@@ -889,6 +904,52 @@ CString C剧情处理Dlg::GetSourceCodeSync(CString url)
 	return result;
 }
 
+
+
+
+
+
+void C剧情处理Dlg::OnEnChangeEdit5()
+{
+	// TODO:  如果该控件是 RICHEDIT 控件，它将不
+	// 发送此通知，除非重写 CDialogEx::OnInitDialog()
+	// 函数并调用 CRichEditCtrl().SetEventMask()，
+	// 同时将 ENM_CHANGE 标志“或”运算到掩码中。
+
+	// TODO:  在此添加控件通知处理程序代码
+}
+
+
+void C剧情处理Dlg::OnBnClickedButton7()
+{
+	UpdateData(true);
+	CString url = TEXT("https://prts.wiki/w/%E5%89%A7%E6%83%85%E4%B8%80%E8%A7%88");
+	CString scode = GetSourceCodeSync(url);
+	m_quetext.MakeUpper();
+	CString target = TEXT(">") + m_quetext + TEXT("-");
+	m_todolist.ResetContent();
+	int pos = -1;
+	while ((pos = scode.Find(target, pos + 1)) != -1)
+	{
+		int pos2 = scode.Find(TEXT("</a>"), pos + 1);
+		CString res = scode.Mid(pos + 1, pos2 - pos - 1);
+		if (m_todolist.FindStringExact(0, res) == CB_ERR) {
+			m_todolist.AddString(res); 
+		}
+	}
+	m_todolist.SetCurSel(0);
+}
+
+
+void C剧情处理Dlg::OnBnClickedButton8()
+{
+	UpdateData(true);
+	int nIndex = m_todolist.GetCurSel();
+	m_todolist.GetLBText(nIndex, m_url);
+	UpdateData(false);
+	if(autonext.GetCheck()) m_todolist.SetCurSel(nIndex + 1);
+	OnBnClickedButton1();
+}
 
 
 
